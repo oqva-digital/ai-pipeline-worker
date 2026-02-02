@@ -1,57 +1,69 @@
 # AI Pipeline Worker
 
-Worker que consome jobs da fila Redis e executa skills com Claude Code CLI, em containers Docker.
+Worker that consumes jobs from a Redis queue and runs skills with Claude Code CLI in Docker containers.
 
-## Pré-requisitos
+**Versioning:** use the files in this repository (versioned). Do not use scripts that embed source code (e.g. a `worker.sh` that generates `worker.js`/Docker on the fly) — they get outdated. Here `setup.sh` only handles environment variables and Docker Compose; the code lives in the repo files.
 
-- Docker e Docker Compose
-- Chave SSH para GitHub (ex.: `~/.ssh/ai_pipeline`) e credenciais Claude em `~/.claude/.credentials.json`
+## Prerequisites
 
-## Configuração
+- Docker and Docker Compose
+- SSH key for GitHub (e.g. `~/.ssh/ai_pipeline`) and Claude credentials at `~/.claude/.credentials.json`
 
-1. **Clone o repositório** (ou use esta pasta como raiz do projeto).
+## Setup
 
-2. **Crie o arquivo `.env`** a partir do exemplo:
+1. **Clone the repository** (or use this folder as the project root).
+
+2. **Create the `.env` file** from the example:
    ```bash
    cp .env.example .env
    ```
-   Edite `.env` e preencha:
-   - `REDIS_URL` – URL do Redis (ex.: `redis://:senha@host:6379`)
-   - `GITHUB_TOKEN` – token do GitHub (para `gh auth`)
-   - Opcional: `CLAUDE_CODE_OAUTH_TOKEN`, `GOOGLE_API_KEY` se o worker usar
+   Edit `.env` and set:
+   - `REDIS_URL` – Redis URL (e.g. `redis://:password@host:6379`)
+   - `GITHUB_TOKEN` – GitHub token (for `gh auth`)
+   - Optional: `CLAUDE_CODE_OAUTH_TOKEN`, `GOOGLE_API_KEY` if the worker needs them
 
-   **Nunca commite `.env`** – ele está no `.gitignore`.
+   **Never commit `.env`** — it is in `.gitignore`.
 
-3. **Suba os workers** usando o script de setup (carrega `.env` e repassa ao Docker Compose):
+3. **Start the workers** using the setup script (loads `.env` and forwards to Docker Compose):
    ```bash
    chmod +x setup.sh
    ./setup.sh up -d
    ```
-   Ou, se preferir, carregue o `.env` manualmente e rode:
+   Or, if you prefer, load `.env` manually and run:
    ```bash
    docker compose up -d
    ```
 
-## Uso do `setup.sh`
+## Using `setup.sh`
 
-O `setup.sh` só lida com variáveis de ambiente e repassa comandos ao Docker Compose. Não embute código fonte; todo o código está nos arquivos versionados.
+`setup.sh` only loads environment variables and forwards commands to Docker Compose. It does not embed source code; all code is in the versioned files.
 
-- Primeira execução sem `.env`: o script copia `.env.example` para `.env` e pede para você editar e rodar de novo.
-- Com `.env` existente: carrega as variáveis e executa `docker compose` com os argumentos passados.
+- First run without `.env`: the script copies `.env.example` to `.env` and asks you to edit and run again.
+- With existing `.env`: loads variables and runs `docker compose` with the arguments you pass.
 
-Exemplos:
-- `./setup.sh up -d` – sobe em background
-- `./setup.sh logs -f` – acompanha os logs
-- `./setup.sh down` – derruba os containers
+Examples:
+- `./setup.sh up -d` – start in background
+- `./setup.sh logs -f` – follow logs
+- `./setup.sh down` – stop containers
 
-## Publicar no GitHub
+## Migrating from worker.sh (script with embedded code)
 
-Depois de clonar ou criar o repositório localmente:
+If you used a single script (e.g. `worker.sh`) that created `worker.js`, Dockerfile and docker-compose in the user folder:
+
+1. **Clone this repository** (or use the existing `ai-pipeline-worker` folder).
+2. **Configure `.env`**: `cp .env.example .env` and set `REDIS_URL`, `GITHUB_TOKEN`, etc.
+3. **Use `setup.sh`** instead of worker.sh: it only loads variables and calls Docker Compose — no embedded code. E.g. `./setup.sh up -d`.
+
+This way you version the code on GitHub and on any machine you only need to clone, configure `.env` and run `./setup.sh up -d`.
+
+## Publishing to GitHub
+
+After cloning or creating the repository locally:
 
 ```bash
-git remote add origin https://github.com/SEU_USUARIO/ai-pipeline-worker.git
+git remote add origin https://github.com/YOUR_USERNAME/ai-pipeline-worker.git
 git branch -M main
 git push -u origin main
 ```
 
-Substitua `SEU_USUARIO/ai-pipeline-worker` pela URL do seu repositório no GitHub.
+Replace `YOUR_USERNAME/ai-pipeline-worker` with your repository URL on GitHub.
