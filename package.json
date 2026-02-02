@@ -1,0 +1,8 @@
+{
+  "name": "ai-pipeline-worker",
+  "version": "1.0.0",
+  "main": "worker.js",
+  "dependencies": {
+    "ioredis": "^5.3.2"
+  }
+}

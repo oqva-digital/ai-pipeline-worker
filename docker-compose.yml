@@ -1,0 +1,13 @@
+services:
+  worker:
+    build: .
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - CI=true
+      - TERM=dumb
+    volumes:
+      - ~/.ssh:/tmp/.ssh-mount:ro
+      # ONLY mount credentials file to temp location - NOT the whole .claude directory
+      - ~/.claude/.credentials.json:/tmp/.claude-credentials.json:ro
