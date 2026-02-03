@@ -279,7 +279,7 @@ EOF
 }
 
 main() {
-  echo -e "${CYAN}AI Pipeline Worker - Install dependencies & auth${NC}"
+  echo -e "${CYAN}AI Pipeline Worker - Install dependencies${NC}"
   detect_os
   install_git
   install_docker
@@ -287,10 +287,17 @@ main() {
   install_gh
   install_node
   install_claude_cli
-  setup_ssh_key
-  setup_claude_auth
-  echo ""
-  print_success "Dependencies and auth OK. Next: create/edit .env and run ./setup.sh up -d"
+
+  # Skip auth if called from setup.sh (SKIP_AUTH=1)
+  if [[ "${SKIP_AUTH:-}" != "1" ]]; then
+    setup_ssh_key
+    setup_claude_auth
+    echo ""
+    print_success "Dependencies and auth OK. Next: create/edit .env and run ./setup.sh up -d"
+  else
+    echo ""
+    print_success "Dependencies installed. Auth will be handled by setup.sh"
+  fi
 }
 
 main "$@"

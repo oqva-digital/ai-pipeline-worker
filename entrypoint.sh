@@ -28,7 +28,7 @@ chown worker:worker /home/worker/.ssh/config
 chmod 600 /home/worker/.ssh/config
 
 # ═══════════════════════════════════════════════════════════════
-# Claude CLI Setup - Create fresh writable directory
+# Claude CLI Setup - Create fresh writable directory with OAuth token
 # ═══════════════════════════════════════════════════════════════
 
 # Remove any existing .claude (might be from image)
@@ -40,12 +40,24 @@ mkdir -p /home/worker/.claude/todos
 mkdir -p /home/worker/.claude/projects
 mkdir -p /home/worker/.claude/statsig
 
-# Copy credentials from mounted file
-if [ -f /tmp/.claude-credentials.json ]; then
+# Create credentials with OAuth token from environment
+if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+    # Create credentials file with the OAuth token
+    cat > /home/worker/.claude/.credentials.json << CREDENTIALS
+{
+  "claudeAiOauth": {
+    "accessToken": "$CLAUDE_CODE_OAUTH_TOKEN"
+  },
+  "hasCompletedOnboarding": true
+}
+CREDENTIALS
+    echo "Claude credentials created from CLAUDE_CODE_OAUTH_TOKEN"
+elif [ -f /tmp/.claude-credentials.json ]; then
+    # Fallback: copy from mounted file (legacy)
     cp /tmp/.claude-credentials.json /home/worker/.claude/.credentials.json
-    echo "Copied Claude credentials"
+    echo "Copied Claude credentials from mounted file"
 else
-    echo "WARNING: Claude credentials not found at /tmp/.claude-credentials.json"
+    echo "WARNING: No Claude credentials found (set CLAUDE_CODE_OAUTH_TOKEN in .env)"
 fi
 
 # Fix permissions

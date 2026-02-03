@@ -5,6 +5,7 @@ services:
     environment:
       - REDIS_URL=${REDIS_URL}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
       - CI=true
       - TERM=dumb
     volumes:
