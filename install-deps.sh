@@ -197,6 +197,8 @@ setup_claude_auth() {
 setup_ssh_key() {
   print_step "Setting up SSH key for GitHub..."
   SSH_KEY_PATH="$HOME/.ssh/ai_pipeline"
+  KEY_ALREADY_EXISTED=0
+  [[ -f "$SSH_KEY_PATH" ]] && KEY_ALREADY_EXISTED=1
   if [[ ! -f "$SSH_KEY_PATH" ]]; then
     ssh-keygen -t ed25519 -C "ai-worker-$(hostname)" -f "$SSH_KEY_PATH" -N ""
     print_success "SSH key generated"
@@ -222,8 +224,8 @@ EOF
     return
   fi
 
-  # Try to add the key automatically via GitHub CLI (opens browser to log in once)
-  if command -v gh &> /dev/null; then
+  # Try to add the key automatically via GitHub CLI only when the key was just created
+  if [[ $KEY_ALREADY_EXISTED -eq 0 ]] && command -v gh &> /dev/null; then
     print_step "Adding SSH key to GitHub via gh (browser login)..."
     if ! gh auth status &> /dev/null; then
       echo ""
