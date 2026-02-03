@@ -32,7 +32,7 @@ if [[ -f "$CRED_JSON" ]]; then
     echo "  You will need to run ./setup-claude.sh (or claude auth login) to log in again."
     echo ""
     read -p "  Continue? [y/N]: " ans
-    [[ "${ans,,}" != "y" && "${ans,,}" != "yes" ]] && { echo "  Cancelled."; exit 0; }
+    case "$ans" in [yY]|[yY][eE][sS]) ;; *) echo "  Cancelled."; exit 0; ;; esac
   fi
   rm -f "$CRED_JSON"
   print_success "Removed $CRED_JSON"
@@ -46,7 +46,7 @@ if [[ -f "$CLAUDE_JSON" ]]; then
     echo "  You will need to run ./setup-claude.sh (or claude auth login) to log in again."
     echo ""
     read -p "  Continue? [y/N]: " ans
-    [[ "${ans,,}" != "y" && "${ans,,}" != "yes" ]] && { echo "  Cancelled."; exit 0; }
+    case "$ans" in [yY]|[yY][eE][sS]) ;; *) echo "  Cancelled."; exit 0; ;; esac
   fi
   rm -f "$CLAUDE_JSON"
   print_success "Removed $CLAUDE_JSON"
