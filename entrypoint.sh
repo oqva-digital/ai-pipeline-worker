@@ -3,13 +3,31 @@
 # This runs as root first
 
 # Copy SSH keys with correct ownership
+echo "=== SSH Setup ==="
 if [ -d /tmp/.ssh-mount ]; then
-    cp /tmp/.ssh-mount/* /home/worker/.ssh/ 2>/dev/null || true
+    echo "Source files in /tmp/.ssh-mount:"
+    ls -la /tmp/.ssh-mount/
+
+    # Copy files individually to catch errors
+    for file in /tmp/.ssh-mount/*; do
+        if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            echo "Copying $filename..."
+            cp "$file" "/home/worker/.ssh/$filename"
+        fi
+    done
+
     chown -R worker:worker /home/worker/.ssh
     chmod 700 /home/worker/.ssh
     chmod 600 /home/worker/.ssh/* 2>/dev/null || true
     chmod 644 /home/worker/.ssh/*.pub 2>/dev/null || true
+
+    echo "Result in /home/worker/.ssh:"
+    ls -la /home/worker/.ssh/
+else
+    echo "WARNING: /tmp/.ssh-mount not found!"
 fi
+echo "===================="
 
 # Add GitHub to known hosts
 ssh-keyscan github.com >> /home/worker/.ssh/known_hosts 2>/dev/null
