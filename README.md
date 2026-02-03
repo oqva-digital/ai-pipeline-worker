@@ -46,6 +46,7 @@ Worker that consumes jobs from a Redis queue and runs skills with Claude Code CL
 - **`./setup.sh logs -f`** — follow logs.
 - **`./setup.sh down`** — stop containers.
 - **`./setup-claude.sh`** — only Claude login (when you want to re-auth or do just this step). Requires Claude CLI installed (run `./install-deps.sh` first if needed).
+- **`./logout-claude.sh`** — remove Claude credentials (`~/.claude/.credentials.json` and `~/.claude.json`). Use `./logout-claude.sh --yes` to skip confirmation.
 
 If `.env` is missing, the script copies `.env.example` to `.env` and asks you to edit and run `./setup.sh up -d` again.
 
