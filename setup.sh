@@ -50,12 +50,42 @@ ensure_env() {
   fi
 }
 
+# --- Detect docker compose command (plugin "docker compose" or standalone "docker-compose") ---
+get_compose_cmd() {
+  if docker compose version &> /dev/null; then
+    echo "docker compose"
+    return
+  fi
+  if command -v docker-compose &> /dev/null && docker-compose version &> /dev/null; then
+    echo "docker-compose"
+    return
+  fi
+  echo ""
+}
+
 # --- Load .env and run docker compose ---
 run_compose() {
+  COMPOSE_CMD=$(get_compose_cmd)
+  if [[ -z "$COMPOSE_CMD" ]]; then
+    print_error "Docker Compose not available."
+    echo ""
+    echo "  - If you just installed Docker Desktop: open the app, wait until it is running,"
+    echo "    then open a new terminal and run: ./setup.sh up -d"
+    echo "  - Or install the plugin: https://docs.docker.com/compose/install/"
+    echo ""
+    exit 1
+  fi
+  if ! docker info &> /dev/null; then
+    print_error "Docker is not running."
+    echo ""
+    echo "  Open Docker Desktop and wait until it starts, then run: ./setup.sh up -d"
+    echo ""
+    exit 1
+  fi
   set -a
   . ./.env
   set +a
-  exec docker compose "$@"
+  exec $COMPOSE_CMD "$@"
 }
 
 # --- Main ---
