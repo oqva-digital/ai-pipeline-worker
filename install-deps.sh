@@ -3,6 +3,7 @@
 # No source code embedded; run from repo root. Use: ./install-deps.sh
 
 set -e
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -166,6 +167,10 @@ install_claude_cli() {
 }
 
 setup_claude_auth() {
+  if [[ -x "$SCRIPT_DIR/setup-claude.sh" ]]; then
+    "$SCRIPT_DIR/setup-claude.sh"
+    return
+  fi
   print_step "Setting up Claude authentication (Max subscription / OAuth)..."
   if [[ -f "$HOME/.claude/.credentials.json" ]] || [[ -f "$HOME/.claude.json" ]]; then
     print_success "Already logged into Claude (credentials found)"
