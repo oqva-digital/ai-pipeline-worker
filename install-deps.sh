@@ -64,7 +64,11 @@ install_docker() {
 install_docker_compose() {
   print_step "Checking Docker Compose..."
   if docker compose version &> /dev/null 2>&1; then
-    print_success "Docker Compose available"
+    print_success "Docker Compose available (plugin)"
+    return
+  fi
+  if command -v docker-compose &> /dev/null && docker-compose version &> /dev/null 2>&1; then
+    print_success "Docker Compose available (standalone)"
     return
   fi
   if [[ "$OS" == "linux" ]]; then
@@ -72,8 +76,16 @@ install_docker_compose() {
     sudo apt-get update -qq
     sudo apt-get install -y docker-compose-plugin
     print_success "Docker Compose installed"
+  elif [[ "$OS" == "macos" ]]; then
+    print_step "Installing Docker Compose (standalone via Homebrew)..."
+    if ! command -v brew &> /dev/null; then
+      print_step "Installing Homebrew..."
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    brew install docker-compose
+    print_success "Docker Compose installed"
   else
-    print_warning "Docker Compose not found. On macOS it usually comes with Docker Desktop."
+    print_warning "Docker Compose not found. Install it manually for your OS."
   fi
 }
 
