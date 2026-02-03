@@ -216,6 +216,28 @@ EOF
     print_success "GitHub SSH connection verified!"
     return
   fi
+
+  # Try to add the key automatically via GitHub CLI (opens browser to log in once)
+  if command -v gh &> /dev/null; then
+    print_step "Adding SSH key to GitHub via gh (browser login)..."
+    if ! gh auth status &> /dev/null; then
+      echo ""
+      echo -e "${YELLOW}  GitHub login required. A browser window will open.${NC}"
+      read -p "  Press ENTER to open GitHub login..." _
+      gh auth login --web --git-protocol ssh
+    fi
+    if gh auth status &> /dev/null; then
+      if gh ssh-key add "${SSH_KEY_PATH}.pub" -t "ai-pipeline-worker-$(hostname)" 2>/dev/null; then
+        print_success "SSH key added to GitHub automatically!"
+        if ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+          print_success "GitHub SSH connection verified!"
+          return
+        fi
+      fi
+    fi
+  fi
+
+  # Fallback: show key and ask user to add manually
   echo ""
   echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo -e "${YELLOW}  ADD THIS SSH KEY TO GITHUB:${NC}"
@@ -244,8 +266,8 @@ main() {
   install_gh
   install_node
   install_claude_cli
-  setup_claude_auth
   setup_ssh_key
+  setup_claude_auth
   echo ""
   print_success "Dependencies and auth OK. Next: create/edit .env and run ./setup.sh up -d"
 }
