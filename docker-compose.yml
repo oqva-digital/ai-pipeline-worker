@@ -10,5 +10,5 @@ services:
       - TERM=dumb
     volumes:
       - ~/.ssh:/tmp/.ssh-mount:ro
-      # ONLY mount credentials file to temp location - NOT the whole .claude directory
-      - ~/.claude/.credentials.json:/tmp/.claude-credentials.json:ro
+      # Optional: mount credentials from project dir (created by install-deps.sh from .env)
+      - ./.claude/.credentials.json:/tmp/.claude-credentials.json:ro
