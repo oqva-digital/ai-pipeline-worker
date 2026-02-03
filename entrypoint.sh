@@ -58,18 +58,21 @@ mkdir -p /home/worker/.claude/todos
 mkdir -p /home/worker/.claude/projects
 mkdir -p /home/worker/.claude/statsig
 
-# Create credentials with OAuth token from environment
+# Create credentials with OAuth tokens from environment
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-    # Create credentials file with the OAuth token
+    # Create complete credentials file with refresh token for auto-renewal
     cat > /home/worker/.claude/.credentials.json << CREDENTIALS
 {
   "claudeAiOauth": {
-    "accessToken": "$CLAUDE_CODE_OAUTH_TOKEN"
+    "accessToken": "$CLAUDE_CODE_OAUTH_TOKEN",
+    "refreshToken": "${CLAUDE_CODE_REFRESH_TOKEN:-}",
+    "expiresAt": ${CLAUDE_CODE_EXPIRES_AT:-0},
+    "scopes": ["user:inference", "user:profile"]
   },
   "hasCompletedOnboarding": true
 }
 CREDENTIALS
-    echo "Claude credentials created from CLAUDE_CODE_OAUTH_TOKEN"
+    echo "Claude credentials created with refresh token support"
 elif [ -f /tmp/.claude-credentials.json ]; then
     # Fallback: copy from mounted file (legacy)
     cp /tmp/.claude-credentials.json /home/worker/.claude/.credentials.json
