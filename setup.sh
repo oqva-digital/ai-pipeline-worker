@@ -133,6 +133,32 @@ extract_claude_oauth_token() {
   echo "$keychain_data" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4
 }
 
+create_claude_credentials() {
+  local token="$1"
+  local script_dir="$(cd "$(dirname "$0")" && pwd)"
+
+  # Create .claude directory in project folder for Docker mount
+  mkdir -p "$script_dir/.claude"
+
+  # Create credentials.json from token
+  cat > "$script_dir/.claude/.credentials.json" << CREDENTIALS
+{
+  "claudeAiOauth": {
+    "accessToken": "$token"
+  },
+  "hasCompletedOnboarding": true
+}
+CREDENTIALS
+  chmod 600 "$script_dir/.claude/.credentials.json"
+  print_success "Claude credentials created in project folder (for Docker)"
+
+  # Also create in home directory for local Claude CLI usage
+  mkdir -p "$HOME/.claude"
+  cp "$script_dir/.claude/.credentials.json" "$HOME/.claude/.credentials.json"
+  chmod 600 "$HOME/.claude/.credentials.json"
+  print_success "Claude credentials created in ~/.claude (for local CLI)"
+}
+
 setup_claude_auth() {
   print_step "Setting up Claude authentication..."
 
@@ -149,6 +175,8 @@ setup_claude_auth() {
     print_success "Claude OAuth token found in keychain"
     update_env_var "CLAUDE_CODE_OAUTH_TOKEN" "$oauth_token"
     print_success "Claude token saved to .env"
+    # Create credentials.json for local CLI and Docker mount
+    create_claude_credentials "$oauth_token"
     return 0
   fi
 
@@ -157,6 +185,8 @@ setup_claude_auth() {
   existing_token=$(get_env_var "CLAUDE_CODE_OAUTH_TOKEN")
   if [[ -n "$existing_token" ]] && [[ "$existing_token" != "" ]]; then
     print_success "Claude token found in .env"
+    # Create credentials.json for local CLI and Docker mount
+    create_claude_credentials "$existing_token"
     return 0
   fi
 
@@ -181,6 +211,8 @@ setup_claude_auth() {
     print_success "Claude authentication successful!"
     update_env_var "CLAUDE_CODE_OAUTH_TOKEN" "$oauth_token"
     print_success "Claude token saved to .env"
+    # Create credentials.json for local CLI and Docker mount
+    create_claude_credentials "$oauth_token"
   else
     print_error "Could not extract Claude OAuth token"
     print_warning "On non-macOS systems, you may need to manually set CLAUDE_CODE_OAUTH_TOKEN"
