@@ -199,6 +199,13 @@ setup_ssh_key() {
   SSH_KEY_PATH="$HOME/.ssh/ai_pipeline"
   KEY_ALREADY_EXISTED=0
   [[ -f "$SSH_KEY_PATH" ]] && KEY_ALREADY_EXISTED=1
+  # Have .pub but no private key (e.g. copied only .pub from server): don't overwrite, ask for private key
+  if [[ -f "${SSH_KEY_PATH}.pub" ]] && [[ ! -f "$SSH_KEY_PATH" ]]; then
+    print_warning "You have ai_pipeline.pub but not the private key."
+    echo "  Copy the private key from the server: scp -P 22 root@SERVER:~/.ssh/ai_pipeline $HOME/.ssh/ai_pipeline"
+    echo "  Then run setup again."
+    return
+  fi
   if [[ ! -f "$SSH_KEY_PATH" ]]; then
     ssh-keygen -t ed25519 -C "ai-worker-$(hostname)" -f "$SSH_KEY_PATH" -N ""
     print_success "SSH key generated"
@@ -244,7 +251,14 @@ EOF
     fi
   fi
 
-  # Fallback: show key and ask user to add manually
+  # Key already existed (e.g. copied from server): don't show "ADD THIS KEY" again, just warn and continue
+  if [[ $KEY_ALREADY_EXISTED -eq 1 ]]; then
+    print_warning "GitHub SSH not verified. If this key is already on GitHub, you're good."
+    echo "  Otherwise add ${SSH_KEY_PATH}.pub at https://github.com/settings/keys"
+    return
+  fi
+
+  # Fallback: show key and ask user to add manually (only when key was just created)
   echo ""
   echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo -e "${YELLOW}  ADD THIS SSH KEY TO GITHUB:${NC}"
