@@ -2,49 +2,51 @@
 
 Worker that consumes jobs from a Redis queue and runs skills with Claude Code CLI in Docker containers.
 
-**Versioning:** use the files in this repository (versioned). Do not use scripts that embed source code (e.g. a `worker.sh` that generates `worker.js`/Docker on the fly) — they get outdated. Here `setup.sh` only handles environment variables and Docker Compose; the code lives in the repo files.
+**Versioning:** use the files in this repository (versioned). Do not use scripts that embed source code (e.g. a `worker.sh` that generates `worker.js`/Docker on the fly) — they get outdated. Here `setup.sh` and `install-deps.sh` handle dependencies, `.env`, and Docker Compose; the code lives in the repo files.
 
-## Prerequisites
+**Supported:** macOS (including Apple Silicon) and Linux (e.g. Ubuntu/Debian).
+
+## Prerequisites (installed/set up by `install-deps.sh` if missing)
 
 - Docker and Docker Compose
-- SSH key for GitHub (e.g. `~/.ssh/ai_pipeline`) and Claude credentials at `~/.claude/.credentials.json`
+- GitHub CLI (`gh`) — used inside the container with `GITHUB_TOKEN`
+- Node.js — used on host to install Claude CLI for `claude auth login`
+- **Claude login:** the script runs `claude auth login` and creates `~/.claude/.credentials.json` (mounted into the container)
+- **GitHub SSH:** the script creates `~/.ssh/ai_pipeline` and asks you to add the public key at https://github.com/settings/keys
 
 ## Setup
 
 1. **Clone the repository** (or use this folder as the project root).
 
-2. **Create the `.env` file** from the example:
+2. **Run setup** — it will install Docker, Docker Compose, `gh`, Node, and Claude CLI if needed; **prompt for Claude login** (browser OAuth) and **GitHub SSH key** (create key and ask you to add it to GitHub); then create `.env` from `.env.example` if missing:
    ```bash
-   cp .env.example .env
+   chmod +x setup.sh install-deps.sh
+   ./setup.sh
    ```
-   Edit `.env` and set:
-   - `REDIS_URL` – Redis URL (e.g. `redis://:password@host:6379`)
-   - `GITHUB_TOKEN` – GitHub token (for `gh auth`)
-   - Optional: `CLAUDE_CODE_OAUTH_TOKEN`, `GOOGLE_API_KEY` if the worker needs them
+   - **Claude:** if you are not logged in, the script runs `claude auth login` and opens the browser.
+   - **GitHub:** if SSH is not set up, it creates `~/.ssh/ai_pipeline`, shows the public key, and asks you to add it at https://github.com/settings/keys.
+   - **macOS:** if Docker was not installed, the script installs Docker Desktop and exits. Open Docker Desktop from Applications, wait for it to start, then run `./setup.sh` again.
+   - If `.env` was created, edit it and set `REDIS_URL`, `GITHUB_TOKEN`, then run:
+   ```bash
+   ./setup.sh up -d
+   ```
+
+3. **Or do it step by step:**
+   - Install dependencies only: `./setup.sh install` (or `./install-deps.sh`)
+   - Create and edit `.env`: `cp .env.example .env` then set `REDIS_URL`, `GITHUB_TOKEN`, etc.
+   - Start workers: `./setup.sh up -d`
 
    **Never commit `.env`** — it is in `.gitignore`.
 
-3. **Start the workers** using the setup script (loads `.env` and forwards to Docker Compose):
-   ```bash
-   chmod +x setup.sh
-   ./setup.sh up -d
-   ```
-   Or, if you prefer, load `.env` manually and run:
-   ```bash
-   docker compose up -d
-   ```
-
 ## Using `setup.sh`
 
-`setup.sh` only loads environment variables and forwards commands to Docker Compose. It does not embed source code; all code is in the versioned files.
+- **`./setup.sh`** — first-time: install Docker/gh if missing, ensure `.env`, then run `docker compose up -d`.
+- **`./setup.sh install`** — only install dependencies (Docker, Docker Compose, `gh`).
+- **`./setup.sh up -d`** — load `.env` and start containers in background.
+- **`./setup.sh logs -f`** — follow logs.
+- **`./setup.sh down`** — stop containers.
 
-- First run without `.env`: the script copies `.env.example` to `.env` and asks you to edit and run again.
-- With existing `.env`: loads variables and runs `docker compose` with the arguments you pass.
-
-Examples:
-- `./setup.sh up -d` – start in background
-- `./setup.sh logs -f` – follow logs
-- `./setup.sh down` – stop containers
+If `.env` is missing, the script copies `.env.example` to `.env` and asks you to edit and run `./setup.sh up -d` again.
 
 ## Migrating from worker.sh (script with embedded code)
 
