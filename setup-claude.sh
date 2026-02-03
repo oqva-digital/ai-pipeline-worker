@@ -28,6 +28,13 @@ fi
 print_step "Setting up Claude authentication (Max subscription / OAuth)..."
 if [[ -f "$HOME/.claude/.credentials.json" ]] || [[ -f "$HOME/.claude.json" ]]; then
   print_success "Already logged into Claude (credentials found)"
+
+  # Ensure credentials are at ~/.claude/.credentials.json for Docker mount
+  if [[ -f "$HOME/.claude.json" ]] && [[ ! -f "$HOME/.claude/.credentials.json" ]]; then
+    mkdir -p "$HOME/.claude"
+    cp "$HOME/.claude.json" "$HOME/.claude/.credentials.json"
+    print_success "Credentials copied to ~/.claude/.credentials.json for Docker"
+  fi
   exit 0
 fi
 
@@ -45,6 +52,13 @@ claude auth login
 
 if [[ -f "$HOME/.claude/.credentials.json" ]] || [[ -f "$HOME/.claude.json" ]]; then
   print_success "Claude authentication successful!"
+
+  # Ensure credentials are at ~/.claude/.credentials.json for Docker mount
+  if [[ -f "$HOME/.claude.json" ]] && [[ ! -f "$HOME/.claude/.credentials.json" ]]; then
+    mkdir -p "$HOME/.claude"
+    cp "$HOME/.claude.json" "$HOME/.claude/.credentials.json"
+    print_success "Credentials copied to ~/.claude/.credentials.json for Docker"
+  fi
 else
   print_error "Claude login failed. Try again: ./setup-claude.sh"
   exit 1
