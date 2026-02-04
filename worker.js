@@ -4,6 +4,67 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// ═══════════════════════════════════════════════════════════════
+// CLAUDE AUTH BYPASS (HEADLESS)
+// ═══════════════════════════════════════════════════════════════
+
+function setupClaudeAuthBypass() {
+  try {
+    const homeDir = os.homedir();
+
+    // 1) Onboarding file to prevent browser / interactive flow
+    const onboardingPath = path.join(homeDir, '.claude.json');
+    const onboardingPayload = {
+      hasCompletedOnboarding: true,
+      theme: 'dark'
+    };
+
+    try {
+      // Try to preserve other fields if the file already exists
+      const existing = fs.readFileSync(onboardingPath, 'utf-8');
+      let data = {};
+      try {
+        data = JSON.parse(existing);
+      } catch {
+        data = {};
+      }
+      data.hasCompletedOnboarding = true;
+      if (!data.theme) data.theme = 'dark';
+      fs.writeFileSync(onboardingPath, JSON.stringify(data, null, 2));
+    } catch {
+      // If the file does not exist (or fails to read), create from scratch
+      fs.writeFileSync(onboardingPath, JSON.stringify(onboardingPayload, null, 2));
+    }
+
+    // 2) Credentials based on CLAUDE_CODE_OAUTH_TOKEN (headless)
+    const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    if (token) {
+      const claudeDir = path.join(homeDir, '.claude');
+      const credentialsPath = path.join(claudeDir, '.credentials.json');
+
+      if (!fs.existsSync(claudeDir)) {
+        fs.mkdirSync(claudeDir, { recursive: true });
+      }
+
+      const credentials = {
+        claudeAiOauth: {
+          accessToken: token,
+          refreshToken: token,
+          expiresAt: 9999999999999,
+          scopes: ['user:inference', 'user:profile']
+        }
+      };
+
+      fs.writeFileSync(credentialsPath, JSON.stringify(credentials, null, 2));
+    }
+  } catch (err) {
+    console.error('Failed to setup Claude auth bypass:', err.message);
+  }
+}
+
+// Run auth bypass on boot before any CLI calls.
+setupClaudeAuthBypass();
+
 const redis = new Redis(process.env.REDIS_URL);
 const WORKER_ID = `${os.hostname()}-${process.pid}`;
 const REPOS_DIR = process.env.REPOS_DIR || '/home/worker/repos';
