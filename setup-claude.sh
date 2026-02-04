@@ -1,6 +1,6 @@
 #!/bin/bash
-# AI Pipeline Worker - Claude auth only. Run when you want to (re)do just Claude login.
-# Also used by install-deps.sh. Usage: ./setup-claude.sh
+# AI Pipeline Worker - Universal Claude auth (macOS + Linux)
+# Automatically detects OS and extracts token accordingly
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -9,24 +9,41 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-CYAN='\033[0;36m'
 NC='\033[0m'
 
-print_step()   { echo -e "\n${BLUE}==>${NC} $1"; }
+print_step()    { echo -e "\n${BLUE}==>${NC} $1"; }
 print_success() { echo -e "${GREEN}✓${NC} $1"; }
 print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 print_error()   { echo -e "${RED}✗${NC} $1"; }
 
-# Extract OAuth token from macOS keychain
+# Extract OAuth token - UNIVERSAL (macOS + Linux)
 extract_oauth_token() {
-  if [[ "$OSTYPE" != "darwin"* ]]; then
-    return 1
+  local token=""
+  
+  # Try macOS Keychain first
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    local keychain_data
+    keychain_data=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null) || true
+    if [[ -n "$keychain_data" ]]; then
+      token=$(echo "$keychain_data" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
+      if [[ -n "$token" ]]; then
+        echo "$token"
+        return 0
+      fi
+    fi
   fi
-  # Get the keychain data for Claude Code credentials
-  local keychain_data
-  keychain_data=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null) || return 1
-  # Extract accessToken from JSON
-  echo "$keychain_data" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4
+  
+  # Try Linux credentials file
+  local creds_file="$HOME/.claude/.credentials.json"
+  if [[ -f "$creds_file" ]]; then
+    token=$(cat "$creds_file" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
+    if [[ -n "$token" ]]; then
+      echo "$token"
+      return 0
+    fi
+  fi
+  
+  return 1
 }
 
 # Save OAuth token to .env file
@@ -42,70 +59,114 @@ save_token_to_env() {
     fi
   fi
 
-  # Update or add CLAUDE_CODE_OAUTH_TOKEN
+  # Update or add CLAUDE_CODE_OAUTH_TOKEN (works on both macOS and Linux)
   if grep -q "^CLAUDE_CODE_OAUTH_TOKEN=" "$env_file" 2>/dev/null; then
-    # Update existing line (macOS compatible sed)
-    sed -i '' "s|^CLAUDE_CODE_OAUTH_TOKEN=.*|CLAUDE_CODE_OAUTH_TOKEN=$token|" "$env_file"
+    # macOS needs '', Linux doesn't - this works on both
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      sed -i '' "s|^CLAUDE_CODE_OAUTH_TOKEN=.*|CLAUDE_CODE_OAUTH_TOKEN=$token|" "$env_file"
+    else
+      sed -i "s|^CLAUDE_CODE_OAUTH_TOKEN=.*|CLAUDE_CODE_OAUTH_TOKEN=$token|" "$env_file"
+    fi
   else
     echo "CLAUDE_CODE_OAUTH_TOKEN=$token" >> "$env_file"
   fi
   print_success "OAuth token saved to .env"
 }
 
+# Detect OS
+detect_os() {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "macOS"
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    echo "Linux"
+  else
+    echo "Unknown"
+  fi
+}
+
 if ! command -v claude &> /dev/null; then
   print_error "Claude CLI not found."
   echo ""
-  echo "  Install dependencies first: ./install-deps.sh"
-  echo "  Or install manually: npm install -g @anthropic-ai/claude-code"
+  echo "  Install: npm install -g @anthropic-ai/claude-code"
   echo ""
   exit 1
 fi
 
-print_step "Setting up Claude authentication (Max subscription / OAuth)..."
+OS=$(detect_os)
+print_step "Setting up Claude authentication on $OS..."
 
-# Check if already logged in (token in keychain)
+# Try to extract existing token
 OAUTH_TOKEN=$(extract_oauth_token 2>/dev/null || echo "")
 
 if [[ -n "$OAUTH_TOKEN" ]]; then
-  print_success "Claude OAuth token found in keychain"
+  print_success "Claude OAuth token found!"
   save_token_to_env "$OAUTH_TOKEN"
+  echo ""
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${GREEN}  ✓ Token extracted and saved${NC}"
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo "Next steps:"
+  echo "  docker compose down"
+  echo "  docker compose up -d --build"
+  echo ""
   exit 0
 fi
 
-# Check for credentials file (legacy check)
-if [[ -f "$HOME/.claude/.credentials.json" ]] || [[ -f "$HOME/.claude.json" ]]; then
-  # Try to extract token from keychain anyway
-  OAUTH_TOKEN=$(extract_oauth_token 2>/dev/null || echo "")
-  if [[ -n "$OAUTH_TOKEN" ]]; then
-    print_success "Claude OAuth token found"
-    save_token_to_env "$OAUTH_TOKEN"
-    exit 0
-  fi
-  print_warning "Credentials file exists but OAuth token not found in keychain"
-  print_warning "Will proceed with login to refresh token..."
-fi
-
+# Need to login
 echo ""
 echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${YELLOW}  CLAUDE LOGIN REQUIRED${NC}"
 echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "  This will open a browser to log in with your Claude account."
-echo "  Your subscription will be used (NOT API credits)."
 echo ""
-read -p "  Press ENTER to log in..." _
+read -p "  Press ENTER to continue..." _
 
 claude auth login
 
-# After login, extract and save the OAuth token
-sleep 1  # Give keychain a moment to update
+# Wait for credentials to be saved
+sleep 2
+
+# Extract the token
 OAUTH_TOKEN=$(extract_oauth_token 2>/dev/null || echo "")
 
 if [[ -n "$OAUTH_TOKEN" ]]; then
   print_success "Claude authentication successful!"
   save_token_to_env "$OAUTH_TOKEN"
+  echo ""
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${GREEN}  ✓ SUCCESS! Token saved to .env${NC}"
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo "Next steps:"
+  echo "  1. Rebuild Docker:"
+  echo "     docker compose down"
+  echo "     docker compose up -d --build"
+  echo ""
+  echo "  2. Test:"
+  echo "     docker exec ai-pipeline-worker-worker-1 claude \"hello\""
+  echo ""
+  echo "  3. Copy token to other servers (optional):"
+  echo "     Token is in: $SCRIPT_DIR/.env"
+  echo "     Copy the CLAUDE_CODE_OAUTH_TOKEN line to other machines"
+  echo ""
 else
-  print_error "Could not extract OAuth token from keychain"
-  print_warning "You may need to manually set CLAUDE_CODE_OAUTH_TOKEN in .env"
+  print_error "Could not extract OAuth token"
+  echo ""
+  print_warning "Manual steps:"
+  
+  if [[ "$OS" == "macOS" ]]; then
+    echo "  Check keychain:"
+    echo "  security find-generic-password -s \"Claude Code-credentials\" -w"
+  else
+    echo "  Check credentials file:"
+    echo "  cat ~/.claude/.credentials.json"
+  fi
+  
+  echo ""
+  echo "  Then manually add to .env:"
+  echo "  CLAUDE_CODE_OAUTH_TOKEN=<your_token>"
+  echo ""
   exit 1
 fi
