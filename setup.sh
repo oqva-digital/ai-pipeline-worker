@@ -124,13 +124,68 @@ setup_github_auth() {
 # Claude Authentication (Headless)
 # ═══════════════════════════════════════════════════════════════
 
-extract_claude_oauth_token() {
+extract_claude_credentials_from_keychain() {
   if [[ "$OSTYPE" != "darwin"* ]]; then
     return 1
   fi
-  local keychain_data
-  keychain_data=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null) || return 1
-  echo "$keychain_data" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4
+  # Returns the full JSON from keychain
+  security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null
+}
+
+save_claude_credentials_to_env() {
+  local keychain_json="$1"
+
+  local access_token refresh_token expires_at
+  access_token=$(echo "$keychain_json" | grep -o '"accessToken":"[^"]*"' | cut -d'"' -f4)
+  refresh_token=$(echo "$keychain_json" | grep -o '"refreshToken":"[^"]*"' | cut -d'"' -f4)
+  expires_at=$(echo "$keychain_json" | grep -o '"expiresAt":[0-9]*' | cut -d':' -f2)
+
+  if [[ -n "$access_token" ]]; then
+    update_env_var "CLAUDE_CODE_OAUTH_TOKEN" "$access_token"
+    update_env_var "CLAUDE_CODE_REFRESH_TOKEN" "$refresh_token"
+    update_env_var "CLAUDE_CODE_EXPIRES_AT" "$expires_at"
+    return 0
+  fi
+  return 1
+}
+
+create_claude_credentials() {
+  local script_dir="$(cd "$(dirname "$0")" && pwd)"
+
+  # Get credentials from .env
+  local access_token refresh_token expires_at
+  access_token=$(get_env_var "CLAUDE_CODE_OAUTH_TOKEN")
+  refresh_token=$(get_env_var "CLAUDE_CODE_REFRESH_TOKEN")
+  expires_at=$(get_env_var "CLAUDE_CODE_EXPIRES_AT")
+
+  if [[ -z "$access_token" ]]; then
+    print_error "No CLAUDE_CODE_OAUTH_TOKEN in .env"
+    return 1
+  fi
+
+  # Create .claude directory in project folder for Docker mount
+  mkdir -p "$script_dir/.claude"
+
+  # Create complete credentials.json with refresh token
+  cat > "$script_dir/.claude/.credentials.json" << CREDENTIALS
+{
+  "claudeAiOauth": {
+    "accessToken": "$access_token",
+    "refreshToken": "${refresh_token:-}",
+    "expiresAt": ${expires_at:-0},
+    "scopes": ["user:inference", "user:profile"]
+  },
+  "hasCompletedOnboarding": true
+}
+CREDENTIALS
+  chmod 600 "$script_dir/.claude/.credentials.json"
+  print_success "Claude credentials created in project folder (for Docker)"
+
+  # Also create in home directory for local Claude CLI usage
+  mkdir -p "$HOME/.claude"
+  cp "$script_dir/.claude/.credentials.json" "$HOME/.claude/.credentials.json"
+  chmod 600 "$HOME/.claude/.credentials.json"
+  print_success "Claude credentials created in ~/.claude (for local CLI)"
 }
 
 setup_claude_auth() {
@@ -141,22 +196,28 @@ setup_claude_auth() {
     return 1
   fi
 
-  # Check if OAuth token already exists in keychain (macOS)
-  local oauth_token
-  oauth_token=$(extract_claude_oauth_token 2>/dev/null || echo "")
+  # Check if credentials already exist in keychain (macOS)
+  local keychain_json
+  keychain_json=$(extract_claude_credentials_from_keychain 2>/dev/null || echo "")
 
-  if [[ -n "$oauth_token" ]]; then
-    print_success "Claude OAuth token found in keychain"
-    update_env_var "CLAUDE_CODE_OAUTH_TOKEN" "$oauth_token"
-    print_success "Claude token saved to .env"
+  if [[ -n "$keychain_json" ]]; then
+    print_success "Claude credentials found in keychain"
+    save_claude_credentials_to_env "$keychain_json"
+    print_success "Claude credentials saved to .env (token + refresh token)"
+    create_claude_credentials
     return 0
   fi
 
-  # Check if token exists in .env
-  local existing_token
+  # Check if credentials exist in .env
+  local existing_token existing_refresh
   existing_token=$(get_env_var "CLAUDE_CODE_OAUTH_TOKEN")
+  existing_refresh=$(get_env_var "CLAUDE_CODE_REFRESH_TOKEN")
   if [[ -n "$existing_token" ]] && [[ "$existing_token" != "" ]]; then
-    print_success "Claude token found in .env"
+    print_success "Claude credentials found in .env"
+    if [[ -z "$existing_refresh" ]]; then
+      print_warning "No refresh token in .env - token may expire without auto-renewal"
+    fi
+    create_claude_credentials
     return 0
   fi
 
@@ -175,15 +236,16 @@ setup_claude_auth() {
   # Wait for keychain to update
   sleep 2
 
-  oauth_token=$(extract_claude_oauth_token 2>/dev/null || echo "")
+  keychain_json=$(extract_claude_credentials_from_keychain 2>/dev/null || echo "")
 
-  if [[ -n "$oauth_token" ]]; then
+  if [[ -n "$keychain_json" ]]; then
     print_success "Claude authentication successful!"
-    update_env_var "CLAUDE_CODE_OAUTH_TOKEN" "$oauth_token"
-    print_success "Claude token saved to .env"
+    save_claude_credentials_to_env "$keychain_json"
+    print_success "Claude credentials saved to .env (token + refresh token)"
+    create_claude_credentials
   else
-    print_error "Could not extract Claude OAuth token"
-    print_warning "On non-macOS systems, you may need to manually set CLAUDE_CODE_OAUTH_TOKEN"
+    print_error "Could not extract Claude credentials"
+    print_warning "On non-macOS systems, manually set CLAUDE_CODE_OAUTH_TOKEN, CLAUDE_CODE_REFRESH_TOKEN, and CLAUDE_CODE_EXPIRES_AT in .env"
     return 1
   fi
 }

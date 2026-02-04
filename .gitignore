@@ -5,6 +5,9 @@
 .env.*.local
 !.env.example
 
+# Claude credentials (created by install-deps.sh from .env)
+.claude/
+
 # Dependencies
 node_modules/
 

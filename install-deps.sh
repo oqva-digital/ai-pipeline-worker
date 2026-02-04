@@ -166,32 +166,97 @@ install_claude_cli() {
   print_success "Claude CLI installed"
 }
 
-setup_claude_auth() {
-  if [[ -x "$SCRIPT_DIR/setup-claude.sh" ]]; then
-    "$SCRIPT_DIR/setup-claude.sh"
-    return
+get_env_var() {
+  local key="$1"
+  grep "^${key}=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2- | head -1
+}
+
+setup_claude_credentials() {
+  print_step "Setting up Claude credentials..."
+
+  # Check for CLAUDE_CODE_OAUTH_TOKEN in .env
+  local oauth_token
+  oauth_token=$(get_env_var "CLAUDE_CODE_OAUTH_TOKEN")
+
+  if [[ -n "$oauth_token" ]] && [[ "$oauth_token" != "" ]]; then
+    # Create .claude directory in project folder for Docker mount
+    mkdir -p "$SCRIPT_DIR/.claude"
+
+    # Create credentials.json from .env token
+    cat > "$SCRIPT_DIR/.claude/.credentials.json" << CREDENTIALS
+{
+  "claudeAiOauth": {
+    "accessToken": "$oauth_token"
+  },
+  "hasCompletedOnboarding": true
+}
+CREDENTIALS
+    chmod 600 "$SCRIPT_DIR/.claude/.credentials.json"
+    print_success "Claude credentials created from .env (CLAUDE_CODE_OAUTH_TOKEN)"
+
+    # Also create in home directory for local Claude CLI usage
+    mkdir -p "$HOME/.claude"
+    cp "$SCRIPT_DIR/.claude/.credentials.json" "$HOME/.claude/.credentials.json"
+    chmod 600 "$HOME/.claude/.credentials.json"
+    print_success "Claude credentials also set for local CLI"
+    return 0
   fi
-  print_step "Setting up Claude authentication (Max subscription / OAuth)..."
-  if [[ -f "$HOME/.claude/.credentials.json" ]] || [[ -f "$HOME/.claude.json" ]]; then
+
+  # No token in .env - check if already logged in
+  if [[ -f "$HOME/.claude/.credentials.json" ]]; then
     print_success "Already logged into Claude (credentials found)"
-    return
+    # Copy to project dir for Docker
+    mkdir -p "$SCRIPT_DIR/.claude"
+    cp "$HOME/.claude/.credentials.json" "$SCRIPT_DIR/.claude/.credentials.json"
+    return 0
   fi
+
+  # Need to login
+  print_warning "No CLAUDE_CODE_OAUTH_TOKEN in .env and no existing credentials"
   echo ""
   echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${YELLOW}  CLAUDE LOGIN REQUIRED${NC}"
+  echo -e "${YELLOW}  OPTIONS:${NC}"
   echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo ""
-  echo "  This will open a browser to log in with your Claude account."
-  echo "  Your subscription will be used (NOT API credits)."
+  echo "  1. Add CLAUDE_CODE_OAUTH_TOKEN to .env (recommended for multiple servers)"
+  echo "  2. Run: claude auth login (for single server)"
   echo ""
-  read -p "  Press ENTER to log in..." _
-  claude auth login
-  if [[ -f "$HOME/.claude/.credentials.json" ]] || [[ -f "$HOME/.claude.json" ]]; then
-    print_success "Claude authentication successful!"
-  else
-    print_error "Claude login failed. Please run: claude auth login"
-    exit 1
+  echo "  To get your OAuth token, run 'claude auth login' on any machine"
+  echo "  then copy the token from ~/.claude/.credentials.json"
+  echo ""
+  return 1
+}
+
+setup_claude_auth() {
+  # Delegate to new function
+  setup_claude_credentials
+}
+
+setup_github_from_env() {
+  print_step "Setting up GitHub authentication..."
+
+  # Check if already authenticated
+  if gh auth status &>/dev/null 2>&1; then
+    print_success "GitHub CLI already authenticated"
+    return 0
   fi
+
+  # Check for GITHUB_TOKEN in .env
+  local github_token
+  github_token=$(get_env_var "GITHUB_TOKEN")
+
+  if [[ -n "$github_token" ]] && [[ "$github_token" != "" ]]; then
+    echo "$github_token" | gh auth login --with-token 2>/dev/null && {
+      print_success "GitHub authenticated from .env (GITHUB_TOKEN)"
+      return 0
+    }
+    print_warning "GitHub token in .env is invalid or expired"
+  fi
+
+  print_warning "No valid GITHUB_TOKEN in .env"
+  echo ""
+  echo "  Add GITHUB_TOKEN to .env or run: gh auth login"
+  return 1
 }
 
 setup_ssh_key() {
@@ -291,7 +356,15 @@ main() {
   # Skip auth if called from setup.sh (SKIP_AUTH=1)
   if [[ "${SKIP_AUTH:-}" != "1" ]]; then
     setup_ssh_key
-    setup_claude_auth
+
+    # Setup credentials from .env (for multi-server deployments)
+    if [[ -f "$SCRIPT_DIR/.env" ]]; then
+      setup_github_from_env || true
+      setup_claude_credentials || true
+    else
+      print_warning "No .env file found. Copy .env.example to .env and fill in credentials."
+    fi
+
     echo ""
     print_success "Dependencies and auth OK. Next: create/edit .env and run ./setup.sh up -d"
   else
