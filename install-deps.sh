@@ -174,6 +174,23 @@ get_env_var() {
 setup_claude_credentials() {
   print_step "Setting up Claude credentials..."
 
+  # CRITICAL: Create ~/.claude.json to skip onboarding (fixes OAuth bug!)
+  # This file tells Claude CLI that onboarding is complete, preventing the
+  # "first time login" flow that breaks OAuth token authentication on Linux
+  mkdir -p "$HOME/.claude"
+  if [[ ! -f "$HOME/.claude.json" ]]; then
+    cat > "$HOME/.claude.json" << 'CLAUDEJSON'
+{
+  "hasCompletedOnboarding": true,
+  "theme": "dark"
+}
+CLAUDEJSON
+    chmod 644 "$HOME/.claude.json"
+    print_success "Created ~/.claude.json (skips onboarding prompt)"
+  else
+    print_success "~/.claude.json already exists"
+  fi
+
   # Check for CLAUDE_CODE_OAUTH_TOKEN in .env
   local oauth_token
   oauth_token=$(get_env_var "CLAUDE_CODE_OAUTH_TOKEN")
