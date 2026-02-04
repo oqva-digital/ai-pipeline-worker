@@ -58,6 +58,19 @@ mkdir -p /home/worker/.claude/todos
 mkdir -p /home/worker/.claude/projects
 mkdir -p /home/worker/.claude/statsig
 
+# CRITICAL: Create ~/.claude.json to skip onboarding (fixes OAuth bug!)
+# This file tells Claude CLI that onboarding is complete, preventing the
+# "first time login" flow that breaks OAuth token authentication
+cat > /home/worker/.claude.json << 'CLAUDEJSON'
+{
+  "hasCompletedOnboarding": true,
+  "theme": "dark"
+}
+CLAUDEJSON
+chown worker:worker /home/worker/.claude.json
+chmod 644 /home/worker/.claude.json
+echo "✓ Created ~/.claude.json (skips onboarding)"
+
 # Create credentials with OAuth tokens from environment
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
     # Create complete credentials file with refresh token for auto-renewal
@@ -72,13 +85,13 @@ if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
   "hasCompletedOnboarding": true
 }
 CREDENTIALS
-    echo "Claude credentials created with refresh token support"
+    echo "✓ Claude credentials created with refresh token support"
 elif [ -f /tmp/.claude-credentials.json ]; then
     # Fallback: copy from mounted file (legacy)
     cp /tmp/.claude-credentials.json /home/worker/.claude/.credentials.json
-    echo "Copied Claude credentials from mounted file"
+    echo "✓ Copied Claude credentials from mounted file"
 else
-    echo "WARNING: No Claude credentials found (set CLAUDE_CODE_OAUTH_TOKEN in .env)"
+    echo "⚠ WARNING: No Claude credentials found (set CLAUDE_CODE_OAUTH_TOKEN in .env)"
 fi
 
 # Fix permissions
@@ -91,7 +104,7 @@ chmod 600 /home/worker/.claude/.credentials.json 2>/dev/null || true
 # ═══════════════════════════════════════════════════════════════
 if [ -n "$GITHUB_TOKEN" ]; then
     echo "$GITHUB_TOKEN" | su worker -c "gh auth login --with-token"
-    echo "GitHub CLI authenticated"
+    echo "✓ GitHub CLI authenticated"
 fi
 
 # Debug output
@@ -100,4 +113,3 @@ ls -la /home/worker/.claude/
 echo "===================="
 # Switch to worker user and run node
 exec su worker -c "node /app/worker.js"
-
