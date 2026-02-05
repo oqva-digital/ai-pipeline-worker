@@ -66,10 +66,12 @@ function setupClaudeAuthBypass() {
 setupClaudeAuthBypass();
 
 const redis = new Redis(process.env.REDIS_URL);
-const WORKER_ID = `${os.hostname()}-${process.pid}`;
+const WORKER_NAME = process.env.WORKER_NAME || os.hostname();
+const WORKER_ID = `${WORKER_NAME}-${process.pid}`;
 const REPOS_DIR = process.env.REPOS_DIR || '/home/worker/repos';
 
 console.log(`Worker ${WORKER_ID} started (generic skill executor)`);
+console.log(`Worker Name: ${WORKER_NAME}`);
 console.log(`Repos: ${REPOS_DIR}`);
 
 if (!fs.existsSync(REPOS_DIR)) {
@@ -320,7 +322,8 @@ async function processJob(job) {
       success: !agentFailed,
       output: parsedOutput,
       gitInfo,
-      duration
+      duration,
+      workerName: WORKER_NAME
     };
 
   } catch (error) {
@@ -328,7 +331,8 @@ async function processJob(job) {
     return {
       success: false,
       error: error.message,
-      duration: Date.now() - startTime
+      duration: Date.now() - startTime,
+      workerName: WORKER_NAME
     };
   } finally {
     // Cleanup temp directory (only for validation jobs)
@@ -367,6 +371,7 @@ async function main() {
       // Mark as processing
       await redis.hset('PROCESSING', job.id, JSON.stringify({
         workerId: WORKER_ID,
+        workerName: WORKER_NAME,
         startedAt: Date.now(),
         type: job.type
       }));
