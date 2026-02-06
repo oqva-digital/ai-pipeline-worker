@@ -14,6 +14,10 @@ RUN npm install -g @anthropic-ai/claude-code
 # Create worker user
 RUN useradd -m worker
 
+# Set Environment Variables for the worker context
+ENV USER=worker
+ENV HOME=/home/worker
+
 # Create writable directories for Claude CLI
 RUN mkdir -p /home/worker/.claude/debug \
     /home/worker/.claude/todos \
@@ -22,10 +26,6 @@ RUN mkdir -p /home/worker/.claude/debug \
     /home/worker/.ssh \
     /home/worker/repos \
     && chown -R worker:worker /home/worker
-
-# Git config
-RUN su worker -c "git config --global user.email 'ai-worker@pipeline.local'" \
-    && su worker -c "git config --global user.name 'AI Pipeline Worker'"
 
 WORKDIR /app
 COPY package.json worker.js entrypoint.sh ./

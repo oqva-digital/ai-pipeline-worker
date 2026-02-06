@@ -1,14 +1,12 @@
 #!/bin/bash
 
-# This runs as root first
-
-# Copy SSH keys with correct ownership
+# This runs as root first to handle permissions of mounted volumes
 echo "=== SSH Setup ==="
 if [ -d /tmp/.ssh-mount ]; then
     echo "Source files in /tmp/.ssh-mount:"
     ls -la /tmp/.ssh-mount/
 
-    # Copy only key files (avoid copying host's config/known_hosts - we set our own)
+    # Copy only key files
     for file in /tmp/.ssh-mount/ai_pipeline /tmp/.ssh-mount/ai_pipeline.pub; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
@@ -17,25 +15,22 @@ if [ -d /tmp/.ssh-mount ]; then
         fi
     done
 
+    # Strict permissions required by SSH
     chown -R worker:worker /home/worker/.ssh
     chmod 700 /home/worker/.ssh
     chmod 600 /home/worker/.ssh/ai_pipeline 2>/dev/null || true
     chmod 644 /home/worker/.ssh/ai_pipeline.pub 2>/dev/null || true
-
-    echo "Result in /home/worker/.ssh:"
-    ls -la /home/worker/.ssh/
 else
     echo "WARNING: /tmp/.ssh-mount not found!"
 fi
-echo "===================="
 
-# Add GitHub to known_hosts (fresh, so we don't rely on host or empty file)
+# Setup known_hosts
 touch /home/worker/.ssh/known_hosts
 ssh-keyscan -t ed25519,rsa github.com > /home/worker/.ssh/known_hosts 2>/dev/null || true
 chown worker:worker /home/worker/.ssh/known_hosts
 chmod 600 /home/worker/.ssh/known_hosts
 
-# Configure SSH to use ai_pipeline key (always ours, not from host)
+# SSH Config (Ensures worker always uses ai_pipeline for GitHub)
 cat > /home/worker/.ssh/config << 'SSHCONFIG'
 Host github.com
     HostName github.com
@@ -48,21 +43,19 @@ chown worker:worker /home/worker/.ssh/config
 chmod 600 /home/worker/.ssh/config
 
 # ═══════════════════════════════════════════════════════════════
-# Claude CLI Setup - Create fresh writable directory with OAuth token
+# Git Global Config (Fixes "Dubious Ownership" & Commit Identity)
 # ═══════════════════════════════════════════════════════════════
+su worker -c "git config --global user.email 'ai-worker@pipeline.local'"
+su worker -c "git config --global user.name 'AI Pipeline Worker'"
+su worker -c "git config --global --add safe.directory '*'"
+echo "✓ Git configured for worker"
 
-# Remove any existing .claude (might be from image)
+# ═══════════════════════════════════════════════════════════════
+# Claude CLI Setup
+# ═══════════════════════════════════════════════════════════════
 rm -rf /home/worker/.claude
+mkdir -p /home/worker/.claude/debug /home/worker/.claude/todos /home/worker/.claude/projects /home/worker/.claude/statsig
 
-# Create fresh directory structure
-mkdir -p /home/worker/.claude/debug
-mkdir -p /home/worker/.claude/todos
-mkdir -p /home/worker/.claude/projects
-mkdir -p /home/worker/.claude/statsig
-
-# CRITICAL: Create ~/.claude.json to skip onboarding (fixes OAuth bug!)
-# This file tells Claude CLI that onboarding is complete, preventing the
-# "first time login" flow that breaks OAuth token authentication
 cat > /home/worker/.claude.json << 'CLAUDEJSON'
 {
   "hasCompletedOnboarding": true,
@@ -70,12 +63,8 @@ cat > /home/worker/.claude.json << 'CLAUDEJSON'
 }
 CLAUDEJSON
 chown worker:worker /home/worker/.claude.json
-chmod 644 /home/worker/.claude.json
-echo "✓ Created ~/.claude.json (skips onboarding)"
 
-# Create credentials with OAuth tokens from environment
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-    # Create complete credentials file with refresh token for auto-renewal
     cat > /home/worker/.claude/.credentials.json << CREDENTIALS
 {
   "claudeAiOauth": {
@@ -87,31 +76,16 @@ if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
   "hasCompletedOnboarding": true
 }
 CREDENTIALS
-    echo "✓ Claude credentials created with refresh token support"
-elif [ -f /tmp/.claude-credentials.json ]; then
-    # Fallback: copy from mounted file (legacy)
-    cp /tmp/.claude-credentials.json /home/worker/.claude/.credentials.json
-    echo "✓ Copied Claude credentials from mounted file"
-else
-    echo "⚠ WARNING: No Claude credentials found (set CLAUDE_CODE_OAUTH_TOKEN in .env)"
+    echo "✓ Claude credentials created"
 fi
 
-# Fix permissions
 chown -R worker:worker /home/worker/.claude
-chmod -R 755 /home/worker/.claude
 chmod 600 /home/worker/.claude/.credentials.json 2>/dev/null || true
 
-# ═══════════════════════════════════════════════════════════════
-# GitHub CLI Setup - Auth with token
-# ═══════════════════════════════════════════════════════════════
+# GitHub CLI Auth
 if [ -n "$GITHUB_TOKEN" ]; then
     echo "$GITHUB_TOKEN" | su worker -c "gh auth login --with-token"
-    echo "✓ GitHub CLI authenticated"
 fi
 
-# Debug output
-echo "=== Claude Setup ==="
-ls -la /home/worker/.claude/
-echo "===================="
-# Switch to worker user and run node
+# Switch to worker and start
 exec su worker -c "node /app/worker.js"

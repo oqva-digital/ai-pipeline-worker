@@ -87,6 +87,13 @@ function exec(cmd, options = {}) {
       timeout: options.timeout || 1800000,
       maxBuffer: 50 * 1024 * 1024,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { 
+        ...process.env, 
+        HOME: '/home/worker', 
+        USER: 'worker',
+        PATH: process.env.PATH // Keep path to find git/claude
+      },
+      shell: true,
       ...options
     });
   } catch (error) {
