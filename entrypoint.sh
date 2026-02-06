@@ -8,8 +8,8 @@ if [ -d /tmp/.ssh-mount ]; then
     echo "Source files in /tmp/.ssh-mount:"
     ls -la /tmp/.ssh-mount/
 
-    # Copy files individually to catch errors
-    for file in /tmp/.ssh-mount/*; do
+    # Copy only key files (avoid copying host's config/known_hosts - we set our own)
+    for file in /tmp/.ssh-mount/ai_pipeline /tmp/.ssh-mount/ai_pipeline.pub; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
             echo "Copying $filename..."
@@ -19,8 +19,8 @@ if [ -d /tmp/.ssh-mount ]; then
 
     chown -R worker:worker /home/worker/.ssh
     chmod 700 /home/worker/.ssh
-    chmod 600 /home/worker/.ssh/* 2>/dev/null || true
-    chmod 644 /home/worker/.ssh/*.pub 2>/dev/null || true
+    chmod 600 /home/worker/.ssh/ai_pipeline 2>/dev/null || true
+    chmod 644 /home/worker/.ssh/ai_pipeline.pub 2>/dev/null || true
 
     echo "Result in /home/worker/.ssh:"
     ls -la /home/worker/.ssh/
@@ -29,18 +29,20 @@ else
 fi
 echo "===================="
 
-# Add GitHub to known hosts
-ssh-keyscan github.com >> /home/worker/.ssh/known_hosts 2>/dev/null
+# Add GitHub to known_hosts (fresh, so we don't rely on host or empty file)
+touch /home/worker/.ssh/known_hosts
+ssh-keyscan -t ed25519,rsa github.com > /home/worker/.ssh/known_hosts 2>/dev/null || true
 chown worker:worker /home/worker/.ssh/known_hosts
+chmod 600 /home/worker/.ssh/known_hosts
 
-# Configure SSH to use ai_pipeline key
+# Configure SSH to use ai_pipeline key (always ours, not from host)
 cat > /home/worker/.ssh/config << 'SSHCONFIG'
 Host github.com
     HostName github.com
     User git
     IdentityFile /home/worker/.ssh/ai_pipeline
     IdentitiesOnly yes
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 SSHCONFIG
 chown worker:worker /home/worker/.ssh/config
 chmod 600 /home/worker/.ssh/config
