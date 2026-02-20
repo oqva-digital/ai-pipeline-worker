@@ -9,6 +9,7 @@ services:
       - CLAUDE_CODE_REFRESH_TOKEN=${CLAUDE_CODE_REFRESH_TOKEN}
       - CLAUDE_CODE_EXPIRES_AT=${CLAUDE_CODE_EXPIRES_AT}
       - WORKER_NAME=${WORKER_NAME}
+      - V0_API_KEY=${V0_API_KEY}
       - CI=true
       - TERM=dumb
     volumes:

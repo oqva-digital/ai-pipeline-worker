@@ -56,12 +56,20 @@ echo "✓ Git configured for worker"
 rm -rf /home/worker/.claude
 mkdir -p /home/worker/.claude/debug /home/worker/.claude/todos /home/worker/.claude/projects /home/worker/.claude/statsig
 
-cat > /home/worker/.claude.json << 'CLAUDEJSON'
-{
-  "hasCompletedOnboarding": true,
-  "theme": "dark"
+# ~/.claude.json: onboarding + MCP servers (MCP MUST be here, not in settings.json)
+node -e "
+const s = { hasCompletedOnboarding: true, theme: 'dark' };
+const v0Key = process.env.V0_API_KEY;
+if (v0Key) {
+  s.mcpServers = {
+    v0: {
+      command: 'npx',
+      args: ['mcp-remote','https://mcp.v0.dev','--header','Authorization: Bearer '+v0Key]
+    }
+  };
 }
-CLAUDEJSON
+require('fs').writeFileSync('/home/worker/.claude.json', JSON.stringify(s,null,2));
+"
 chown worker:worker /home/worker/.claude.json
 
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
